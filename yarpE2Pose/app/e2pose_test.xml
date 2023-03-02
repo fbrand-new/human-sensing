@@ -1,0 +1,37 @@
+<application>
+	<name>e2pose_test</name>
+
+	<dependencies>
+	</dependencies>
+	
+	<module>
+		<name>yarpdev</name>
+        <parameters>--device ffmpeg_grabber --source /root/misc/MeWalking_256_192.mp4 --name /meWalking</parameters>
+		<node>container-e2pose</node>
+    </module>
+
+	<module>
+		<name>python3</name>
+        <parameters>/root/e2pose/yarpE2Pose.py</parameters>
+		<node>container-e2pose</node>
+	</module>
+    
+	<module>
+		<name>yarpview</name>
+		<parameters>--name /view/e2pose --w 640 --h 480</parameters>
+		<node>container-e2pose</node>
+    </module>
+
+	<connection>
+		<from>/meWalking</from>
+		<to>/e2pose/image:i</to>
+		<protocol>mjpeg</protocol>
+	</connection>
+
+	<connection>
+		<from>/e2pose/image:o</from>
+		<to>/view/e2pose</to>
+		<protocol>mjpeg</protocol>
+	</connection>
+
+</application>

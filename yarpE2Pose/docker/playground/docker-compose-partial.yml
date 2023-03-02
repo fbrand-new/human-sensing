@@ -1,0 +1,37 @@
+version: "3.8"
+  
+x-yarpe2pose: &yarpe2pose
+  build: ./image
+  image: fbrand-new/tensorflow:yarp_e2pose
+  environment: 
+    - DISPLAY=${DISPLAY}
+    - QT_X11_NO_MITSHM=1
+    - XAUTHORITY=/root/.Xauthority
+  volumes:
+    - "/tmp/.X11-unix:/tmp/.X11-unix"
+    - "${XAUTHORITY}:/root/.Xauthority"
+    - "${HOME}/.config/yarp:/root/.config/yarp"
+    - "~/misc:/misc"
+    - "~/robotology/human-sensing:/root/human-sensing"
+  network_mode: "host"
+  pid: "host" 
+  privileged: true
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+        
+services:
+  yarpserver:
+    <<: *yarpe2pose  
+    container_name: brand-e2pose
+    command: sh -c "yarpserver --write" 
+
+  yarprun:
+    <<: *yarpe2pose
+    command: sh -c "yarprun --server /container-e2pose --log" 
+    depends_on: 
+      - yarpserver

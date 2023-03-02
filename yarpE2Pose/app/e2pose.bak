@@ -1,0 +1,84 @@
+<application>
+	<name>e2pose_test</name>
+
+	<dependencies>
+	</dependencies>
+	
+	<module>
+		<name>yarpdev</name>
+		<parameters>--device ffmpeg_grabber --source /root/misc/MeWalking_256_192.mp4 --name /meWalking</parameters>
+		<node>console</node>
+	</module>
+	<module>
+		<name>yarpOpenPose</name>
+		<parameters>--context openPoseStuff --from yarpOpenPose_1p7.ini</parameters>
+		<node>console3</node>
+	</module>
+	<module>
+		<name>yarpdev</name>
+		<parameters>--device ffmpeg_grabber --source /root/misc/openpose_example_0.avi --name /grabber</parameters>
+		<node>console</node>
+	</module>
+	<module>
+		<name>python3</name>
+		<parameters>/root/e2pose/yarpE2Pose.py</parameters>
+		<node>console</node>
+	</module>
+	<module>
+		<name>yarpview</name>
+		<parameters>--name /view/rgb --w 640 --h 480</parameters>
+		<node>console</node>
+	</module>
+	<module>
+		<name>yarpview</name>
+		<parameters>--name /view/e2pose --w 640 --h 480</parameters>
+		<node>console</node>
+	</module>
+	<module>
+		<name>python3</name>
+		<parameters>/home/user1/robotology/iCubContrib/bin/multiface-mutualgaze-classifier.py --context mutual-gaze-classifier-demo --from classifier_conf.ini</parameters>
+		<node>console3</node>
+	</module>
+	<module>
+		<name>yarpdatadumper</name>
+		<parameters>--name /log</parameters>
+		<node>console</node>
+	</module>
+	<connection>
+		<from>/meWalking</from>
+		<to>/e2pose/image:i</to>
+		<protocol>mjpeg</protocol>
+	</connection>
+
+	<connection>
+		<from>/meWalking</from>
+		<to>/view/rgb</to>
+		<protocol>mjpeg</protocol>
+	</connection>
+	<connection>
+		<from>/e2pose/image:o</from>
+		<to>/view/e2pose</to>
+		<protocol>mjpeg</protocol>
+	</connection>
+
+	<connection>
+		<from>/e2pose/target:o</from>
+		<to>/log</to>
+	</connection>
+
+	<connection>
+		<from>/e2pose/target:o</from>
+		<to>/mutualgaze/data:i</to>
+	</connection>
+
+	<connection>
+		<from>/meWalking</from>
+		<to>/mutualgaze/image:i</to>
+	</connection>
+
+	<connection>
+		<from>/mutualgaze/image:o</from>
+		<to>/view/rgb</to>
+	</connection>
+
+</application>

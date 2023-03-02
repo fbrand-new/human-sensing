@@ -1,0 +1,58 @@
+version: "3.8"
+  
+x-yarpe2pose: &yarpe2pose
+  build: ./image
+  image: fbrand-new/tensorflow:yarp_e2pose
+  environment: 
+    - DISPLAY=${DISPLAY}
+    - QT_X11_NO_MITSHM=1
+    - XAUTHORITY=/root/.Xauthority
+  volumes:
+    - "/tmp/.X11-unix:/tmp/.X11-unix"
+    - "${XAUTHORITY}:/root/.Xauthority"
+    - "${HOME}/.config/yarp:/root/.config/yarp"
+    - "~/misc:/misc"
+    - "~/robotology/human-sensing:/root/human-sensing"
+  network_mode: "host"
+  pid: "host" 
+  privileged: true
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+        
+services:
+  yarpserver:
+    <<: *yarpe2pose  
+    container_name: brand-e2pose
+    command: sh -c "yarpserver --write" 
+
+  yarprun:
+    <<: *yarpe2pose
+    command: sh -c "yarprun --server /container-e2pose --log" 
+    depends_on: 
+      - yarpserver
+
+  video:
+    <<: *yarpe2pose
+    command: sh -c "yarpdev --device ffmpeg_grabber --source /misc/MeWalking_256_192.mp4 --name /meWalking"
+
+  e2pose:
+    <<: *yarpe2pose
+    command: sh -c "python3 /root/human-sensing/yarpE2Pose/yarpE2Pose.py"
+
+  viewer:
+    <<: *yarpe2pose
+    command: sh -c "yarpview --name /view/e2pose --w 640 --h 480"
+
+
+  connect:
+    <<: *yarpe2pose
+    command: sh -c "yarp wait /e2pose/image:i; yarp wait /meWalking; yarp connect /meWalking /e2pose/image:i mjpeg"
+
+  connect2:
+    <<: *yarpe2pose
+    command: sh -c "yarp wait /view/e2pose; yarp wait /e2pose/image:o; yarp connect /view/e2pose /e2pose/image:o mjpeg" 
