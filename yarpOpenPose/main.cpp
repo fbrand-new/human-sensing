@@ -292,12 +292,15 @@ private:
     yarp::os::BufferedPort<yarp::sig::ImageOf<yarp::sig::PixelRgb> > outPortPropag;
     yarp::os::BufferedPort<yarp::sig::ImageOf<yarp::sig::PixelFloat> > outFloatPort;
     yarp::sig::ImageOf<yarp::sig::PixelFloat> *inFloat;
+    yarp::os::BufferedPort<yarp::os::Property> outGazePort;
 
     std::mutex             mutex;
 
     bool sendFloat;
     yarp::os::Stamp stamp;
     yarp::os::Stamp stampFloat;
+    yarp::os::Stamp gazeStamp;
+
 
 public:
 
@@ -314,6 +317,7 @@ public:
         outPort.open("/" + moduleName + "/image:o");
         outFloatPort.open("/" + moduleName + "/float:o");
         outPortPropag.open("/" + moduleName + "/propag:o");
+        outGazePort.open("/" +moduleName + "/frame:o");
         sendFloat = false;
     }
 
@@ -327,6 +331,11 @@ public:
         this->stamp = stamp;
     }
 
+    void setStamp(const yarp::os::Stamp &stamp, const yarp::os::Stamp &gazeStamp)
+    {
+        setStamp(stamp);
+        this->gazeStamp = gazeStamp;
+    }
     /********************************************************/
     void setImage(yarp::sig::ImageOf<yarp::sig::PixelFloat> &inFloat, const yarp::os::Stamp &stamp) {
         const std::lock_guard<std::mutex> lock(mutex);
@@ -340,7 +349,8 @@ public:
     {
         outPort.close();
         outPortPropag.close();
-	    outFloatPort.close();
+        outFloatPort.close();
+        outGazePort.close();
     }
 
     /********************************************************/
@@ -384,6 +394,16 @@ public:
         else
             op::opLog("Nullptr or empty datumsPtr found.", op::Priority::Max, __LINE__, __FUNCTION__, __FILE__);
     }
+
+
+    void workConsumer(const std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>>& datumsPtr, yarp::os::Property* p)
+    {
+        workConsumer(datumsPtr);
+        yarp::os::Property &gazeProperty = outGazePort.prepare();
+        gazeProperty = *p;
+        outGazePort.setEnvelope(gazeStamp);
+        outGazePort.write();
+    }
 };
 
 /********************************************************/
@@ -394,6 +414,7 @@ private:
     yarp::os::RpcServer         rpcPort;
     yarp::os::BufferedPort<yarp::sig::ImageOf<yarp::sig::PixelRgb> > inPort;
     yarp::os::BufferedPort<yarp::sig::ImageOf<yarp::sig::PixelFloat> > inFloatPort;
+    yarp::os::BufferedPort<yarp::os::Property> gazePort;
 
     std::string                 model_name;
     std::string                 model_folder;
@@ -584,6 +605,7 @@ public:
         attach(rpcPort);
         inPort.open("/" + moduleName + "/image:i");
         inFloatPort.open("/" + moduleName + "/float:i");
+        gazePort.open("/" + moduleName + "/gaze:i");
 
         opWrapper.start();
 
@@ -618,6 +640,7 @@ public:
     {
         inPort.close();
         inFloatPort.close();
+        gazePort.close();
         delete inputClass;
         delete outputClass;
         delete processingClass;
@@ -639,38 +662,45 @@ public:
     {
         if (yarp::sig::ImageOf<yarp::sig::PixelRgb> *inImage = inPort.read())
         {
-            yarp::os::Stamp stamp;
-            inPort.getEnvelope(stamp);
-            inputClass->setImage(*inImage);
-            outputClass->setStamp(stamp);
-            processingClass->setStamp(stamp);
-
-            if (inFloatPort.getInputCount() > 0)
-                if (yarp::sig::ImageOf<yarp::sig::PixelFloat> *inFloat = inFloatPort.read())
-                {
-                    yarp::os::Stamp stampFloat;
-                    inFloatPort.getEnvelope(stampFloat);
-                    outputClass->setFlag(true);
-
-                    outputClass->setImage(*inFloat, stampFloat);
-                }
-
-            auto datumToProcess = inputClass->workProducer();
-            if (datumToProcess != nullptr)
+            if(yarp::os::Property* p = gazePort.read(false))
             {
-                auto successfullyEmplaced = opWrapper.waitAndEmplace(datumToProcess->at(0)->cvInputData);
-                // Pop frame
-                std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>> datumProcessed;
-                
-                const auto status = opWrapper.waitAndPop(datumProcessed);
-                
-                if (successfullyEmplaced && status)
+                yarp::os::Stamp stamp;
+                inPort.getEnvelope(stamp);
+
+                yarp::os::Stamp stampGaze;
+                gazePort.getEnvelope(stampGaze);
+
+                inputClass->setImage(*inImage);
+                outputClass->setStamp(stamp,stampGaze);
+                processingClass->setStamp(stamp);
+
+                if (inFloatPort.getInputCount() > 0)
+                    if (yarp::sig::ImageOf<yarp::sig::PixelFloat> *inFloat = inFloatPort.read())
+                    {
+                        yarp::os::Stamp stampFloat;
+                        inFloatPort.getEnvelope(stampFloat);
+                        outputClass->setFlag(true);
+
+                        outputClass->setImage(*inFloat, stampFloat);
+                    }
+
+                auto datumToProcess = inputClass->workProducer(); //TODO: add a pointer to the frame in datumToProcess
+                if (datumToProcess != nullptr)
                 {
-                    outputClass->workConsumer(datumProcessed);
-                    processingClass->work(datumProcessed);
+                    auto successfullyEmplaced = opWrapper.waitAndEmplace(datumToProcess->at(0)->cvInputData);
+                    // Pop frame
+                    std::shared_ptr<std::vector<std::shared_ptr<op::Datum>>> datumProcessed;
+                    
+                    const auto status = opWrapper.waitAndPop(datumProcessed);
+                    
+                    if (successfullyEmplaced && status)
+                    {
+                        outputClass->workConsumer(datumProcessed,p); //TODO: possibly process here the datum and the gaze frame. Got to make sure that they are together though. Not possible to pass the info as op::datum object anyway.
+                        processingClass->work(datumProcessed);
+                    }
+                    else
+                        yError() << "Processed datum could not be emplaced.";
                 }
-                else
-                    yError() << "Processed datum could not be emplaced.";
             }
         }
 
