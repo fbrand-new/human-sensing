@@ -1,6 +1,5 @@
 import numpy as np
 import sys
-print(sys.path)
 import yarp
 import tensorflow as tf
 # from e2pose.models.model import E2PoseModel
@@ -66,7 +65,10 @@ class yarpE2PoseModule(yarp.RFModule):
         self.image_height = rf.find("height").asInt16()
         self.face_keypoints = rf.find("face-keypoints").asInt16()
         self.period = rf.find("period").asInt16()
-        
+       
+        # Get net input size from model name
+        self.model_input_size = list(map(int,self.model_name.split("/")[2].split("x"))) 
+
         # Load the model
         self.model = E2PoseInference_by_pb(os.path.join(yarpE2Pose_path,"models",self.model_name))
         self.painter = draw.Painter(self.dataset)
@@ -125,7 +127,7 @@ class yarpE2PoseModule(yarp.RFModule):
         frame = np.copy(self.in_buf_array)
 
         #convert yarp to useful format 
-        frame = cv2.resize(frame, dsize=(512,512), interpolation=cv2.INTER_CUBIC)
+        frame = cv2.resize(frame, dsize=(self.model_input_size[0],self.model_input_size[1]), interpolation=cv2.INTER_CUBIC)
         pred = self.model(np.stack([frame], axis=0))
         #TODO: pay attention as originally we decode a shape of raw not of frame
         humans = self.model.decode(pred, frame.shape[:2])

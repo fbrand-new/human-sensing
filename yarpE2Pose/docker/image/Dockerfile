@@ -38,6 +38,13 @@ RUN cd /robotology && git clone https://github.com/robotology/icub-main.git \
 RUN cd /robotology && git clone https://github.com/robotology/icub-contrib-common.git \
 	&& cd icub-contrib-common && mkdir build && cd build && cmake .. && make && make install
 RUN apt-get -y  install swig
+
+#Code specific requirements
 RUN pip3 install opencv-python tqdm matplotlib
 RUN cd /robotology && git clone -b feat/python_module https://github.com/fbrand-new/E2Pose.git
 RUN cd /robotology && git clone -b feature/yarpE2Pose https://github.com/fbrand-new/human-sensing.git
+#Download the pretrained models
+RUN cd /robotology/human-sensing/yarpE2Pose/pretrains && ./download.sh
+
+#Fix gpu driver version
+RUN ln -f -s libcuda.so.515.65.01 libcuda.so.1
