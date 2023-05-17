@@ -2,6 +2,7 @@ from yarpPose import yarpPose
 from mmpose.apis import MMPoseInferencer
 import importlib.util
 import sys
+import time
 
 class yarpMMPose(yarpPose):
 
@@ -24,6 +25,15 @@ class yarpMMPose(yarpPose):
 
         self.inferencer = inferencer
         self.dataset = dataset
+
+        if self.dataset == 'COCO':
+            spec = importlib.util.spec_from_file_location("coco",'/mmpose/configs/_base_/datasets/coco.py')
+            dataset_module = importlib.util.module_from_spec(spec)
+            sys.modules["coco"] = dataset_module
+            spec.loader.exec_module(dataset_module)
+        
+        self.keypoint_info = dataset_module.dataset_info["keypoint_info"]    
+            
         super().__init__("yarpMMPose")
 
     @classmethod
@@ -46,16 +56,12 @@ class yarpMMPose(yarpPose):
         return cls(config,model,det_model,det_weights,dataset)
 
     def inference(self,img):
+
         generator = self.inferencer(img)
+        start = time.time()
         result = next(generator)
-
-        if self.dataset == 'COCO':
-            spec = importlib.util.spec_from_file_location("coco",'/mmpose/configs/_base_/datasets/coco.py')
-            dataset_module = importlib.util.module_from_spec(spec)
-            sys.modules["coco"] = dataset_module
-            spec.loader.exec_module(dataset_module)
-
-        keypoint_info = dataset_module.dataset_info["keypoint_info"]
+        end = time.time()
+        print("inf time:", end-start)
 
         keypoints = [] 
         predictions = result["predictions"]
@@ -63,8 +69,8 @@ class yarpMMPose(yarpPose):
         for person in predictions[0]: 
             person_keypoints = {} 
             for i, keypoint in enumerate(person["keypoints"]):
-                person_keypoints[keypoint_info[i]["name"]] = keypoint 
-                person_keypoints[keypoint_info[i]["name"]].append(person["keypoint_scores"][i])
+                person_keypoints[self.keypoint_info[i]["name"]] = keypoint 
+                person_keypoints[self.keypoint_info[i]["name"]].append(person["keypoint_scores"][i])
 
             keypoints.append(person_keypoints)
         

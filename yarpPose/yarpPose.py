@@ -26,11 +26,12 @@ class yarpPose(yarp.RFModule):
         self.in_port_name = "/" + self.module_name + "/image:i"
         self.in_port.open(self.in_port_name)
 
-        self.out_image_port = yarp.BufferedPortImageRgb()
+        # TODO: possibly using port and not buffered port is causing delay issues. We want to be able to drop packets
+        self.out_image_port = yarp.Port()
         self.out_image_port_name = "/" + self.module_name + "/image:o"
         self.out_image_port.open(self.out_image_port_name)
 
-        self.out_target_port = yarp.BufferedPortBottle()
+        self.out_target_port = yarp.Port()
         self.out_target_port_name = "/" + self.module_name + "/target:o"
         self.out_target_port.open(self.out_target_port_name)
 
@@ -38,12 +39,12 @@ class yarpPose(yarp.RFModule):
         self.in_buf_array = np.ones((image_h,image_w,3), dtype = np.uint8)
         self.in_buf_image = yarp.ImageRgb()
         self.in_buf_image.resize(image_w,image_h)
-        self.in_buf_image.setExternal(self.in_buf_array,self.in_buf_array.shape[1],self.in_buf_array.shape[1])
+        self.in_buf_image.setExternal(self.in_buf_array,self.in_buf_array.shape[1],self.in_buf_array.shape[0])
 
         self.out_buf_array = np.ones((image_h,image_w,3), dtype = np.int8)
         self.out_buf_image = yarp.ImageRgb()
         self.out_buf_image.resize(image_w,image_h)
-        self.out_buf_image.setExternal(self.out_buf_array,self.out_buf_array.shape[1],self.out_buf_array.shape[1])
+        self.out_buf_image.setExternal(self.out_buf_array,self.out_buf_array.shape[1],self.out_buf_array.shape[0])
 
         return True
 
@@ -62,7 +63,7 @@ class yarpPose(yarp.RFModule):
 
         for keypoints in skeletons:
 
-            keypoints = np.reshape(keypoints,[-1,3])
+            #keypoints = np.reshape(keypoints,[-1,3])
             skeleton_bottle = yarp.Bottle()
 
             for n, kp in enumerate(keypoints):
@@ -71,18 +72,18 @@ class yarpPose(yarp.RFModule):
                 keypoint_bottle.addFloat32(keypoints[kp][0]) #x
                 keypoint_bottle.addFloat32(keypoints[kp][1]) #y
                 keypoint_bottle.addFloat32(keypoints[kp][2]) #score
-                skeleton_bottle.addBottle(keypoint_bottle)
+                skeleton_bottle.addList().read(keypoint_bottle)
             
-            subtarget_bottle.addBottle(skeleton_bottle)
+            subtarget_bottle.addList().read(skeleton_bottle)
 
-        target_bottle.addBottle(subtarget_bottle)
+        target_bottle.addList().read(subtarget_bottle)
 
         # Writing output skeletons data
         self.out_target_port.write(target_bottle)
 
         # Writing output image
         self.out_buf_array[:,:] = frame
-        self.out_image_port.write(self.out_buf_array)
+        self.out_image_port.write(self.out_buf_image)
 
         return True
     
