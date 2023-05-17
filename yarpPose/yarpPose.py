@@ -28,7 +28,7 @@ class yarpPose(yarp.RFModule):
 
         self.out_image_port = yarp.BufferedPortImageRgb()
         self.out_image_port_name = "/" + self.module_name + "/image:o"
-        self.out_image_port.open(self.in_port_name)
+        self.out_image_port.open(self.out_image_port_name)
 
         self.out_target_port = yarp.BufferedPortBottle()
         self.out_target_port_name = "/" + self.module_name + "/target:o"
