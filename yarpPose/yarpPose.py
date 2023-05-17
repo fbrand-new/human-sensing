@@ -10,6 +10,7 @@ class yarpPose(yarp.RFModule):
     def __init__(self,name):
         self.module_name = name
         self.period = 0.1
+        super().__init__()
         
     def inference(self,img):
         pass
@@ -29,7 +30,7 @@ class yarpPose(yarp.RFModule):
         self.out_image_port_name = "/" + self.module_name + "/image:o"
         self.out_image_port.open(self.in_port_name)
 
-        self.out_target_port = yarp.BufferedPort()
+        self.out_target_port = yarp.BufferedPortBottle()
         self.out_target_port_name = "/" + self.module_name + "/target:o"
         self.out_target_port.open(self.out_target_port_name)
 
@@ -44,6 +45,7 @@ class yarpPose(yarp.RFModule):
         self.out_buf_image.resize(image_w,image_h)
         self.out_buf_image.setExternal(self.out_buf_array,self.out_buf_array.shape[1],self.out_buf_array.shape[1])
 
+        return True
 
     def updateModule(self):
         
@@ -131,11 +133,7 @@ if __name__ == '__main__':
     rf.setDefaultConfigFile(os.path.join(yarpPose_path,'app/conf/yarpPose.ini'))
     rf.configure(sys.argv)
 
-    #module_name = rf.find("module").asString()
-    manager = yarpPose('yarpMMPose').build(rf)
+    module_name = rf.find("module").asString()
+    manager = yarpPose(module_name).build(rf)
     #manager = yarpMMPose()
-
-    print(type(manager))
-    print(type(rf))
-
     manager.runModule(rf)

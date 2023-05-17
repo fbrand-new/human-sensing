@@ -24,7 +24,7 @@ class yarpMMPose(yarpPose):
 
         self.inferencer = inferencer
         self.dataset = dataset
-        super().__init__("MMPose")
+        super().__init__("yarpMMPose")
 
     @classmethod
     def fromconfig(cls,rf):
