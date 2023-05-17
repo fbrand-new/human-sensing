@@ -1,6 +1,6 @@
-ARG PYTORCH="1.8.1"
-ARG CUDA="10.2"
-ARG CUDNN="7"
+ARG PYTORCH="2.0.1"
+ARG CUDA="11.7"
+ARG CUDNN="8"
 
 ARG CMAKE_GENERATOR="Unix Makefiles"
 ARG BUILD_TYPE="Release"
@@ -15,13 +15,16 @@ ENV TORCH_CUDA_ARCH_LIST="6.0 6.1 7.0+PTX"
 ENV TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
 ENV CMAKE_PREFIX_PATH="$(dirname $(which conda))/../"
 
+# Non interactive installation mode
+ENV DEBIAN_FRONTEND=noninteractive
+
 # To fix GPG key error when running apt-get update
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
 RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/7fa2af80.pub
 
-RUN apt-get update && apt-get install -y wget git ninja-build libglib2.0-0 libsm6 libxrender-dev libxext6 libgl1-mesa-glx vim\
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y wget git ninja-build libglib2.0-0 libsm6 libxrender-dev libxext6 libgl1-mesa-glx vim
+    # && apt-get clean \
+    # && rm -rf /var/lib/apt/lists/*
 
 # Install xtcocotools
 RUN pip install cython
@@ -43,35 +46,46 @@ RUN pip install mmdet
 RUN pip install opencv-python
 
 # Install yarp
-RUN cd / && git clone https://github.com/robotology/robotology-superbuild &&\
-    cd robotology-superbuild &&\
-    git checkout ${SUPERBUILD_RELEASE} &&\
-    apt update && ./scripts/install_apt_dependencies.sh &&\
-    mkdir build && cd build &&\
-    cmake ..  \ 
-        -G ${CMAKE_GENERATOR} \
-        -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-        -DYCM_EP_INSTALL_DIR=${INSTALL_DIR} &&\
-    cmake --build . -- ${CMAKE_EXTRA_OPTIONS}
+RUN apt update && apt install -y cmake g++ wget unzip \
+    build-essential git cmake cmake-curses-gui swig \
+    libeigen3-dev \
+    libace-dev \
+    libedit-dev \
+    libsqlite3-dev \
+    libtinyxml-dev \
+    qtbase5-dev qtdeclarative5-dev qtmultimedia5-dev \
+    qml-module-qtquick2 qml-module-qtquick-window2 \
+    qml-module-qtmultimedia qml-module-qtquick-dialogs \
+    qml-module-qtquick-controls qml-module-qt-labs-folderlistmodel \
+    qml-module-qt-labs-settings \
+    libqcustomplot-dev \
+    libgraphviz-dev \
+    libjpeg-dev \
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-libav
 
-RUN cd ${PROJECTS_DIR}/robotology-superbuild/src/YCM && \
-    git checkout master && \
-    git pull --rebase
+RUN cd / && git clone https://github.com/robotology/ycm.git && mkdir robotology && mv ycm/ robotology/ \
+    && cd robotology/ycm && mkdir build \
+    && cd build && cmake .. && make && make install
 
-RUN cd ${PROJECTS_DIR}/robotology-superbuild/src/YARP && \
-    git checkout master && \
-    git pull --rebase && \
-    cmake . \                                                                                                                                              1         -G "$CMAKE_GENERATOR" \
-    -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-    -DENABLE_yarpcar_mjpeg=ON \
-    -DENABLE_yarpmod_RGBDSensorClient=ON \
-    -DENABLE_yarppm_bottle_compression_zlib=ON \
-    -DENABLE_yarppm_image_compression_ffmpeg=ON \
-    -DENABLE_YARP_COMPILE_BINDINGS=ON \
-    -DCREATE_PYTHON=ON
+RUN cd /robotology && git clone https://github.com/robotology/yarp.git \
+	&& cd yarp && mkdir build && cd build \ 
+    && cmake -D ENABLE_yarpcar_mjpeg=ON -D YARP_COMPILE_BINDINGS=ON -D CREATE_PYTHON=ON .. \
+	&& make -j8 && make install
 
+RUN cd /robotology && git clone https://github.com/robotology/icub-main.git \
+	&& cd icub-main && mkdir build && cd build && cmake .. && make && make install 
+RUN cd /robotology && git clone https://github.com/robotology/icub-contrib-common.git \
+	&& cd icub-contrib-common && mkdir build && cd build && cmake .. && make && make install
+
+# Install the application
 COPY . /yarpPose
 RUN /yarpPose/download_models.sh
+
+ENV PYTHONPATH="/robotology/yarp/build/lib/python3:/root/yarpPose"
 
 COPY docker/entrypoint.sh /
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"] 

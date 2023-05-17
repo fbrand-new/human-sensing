@@ -15,7 +15,8 @@ class MMPoseInferenceTest(unittest.TestCase):
            'td-hm_hrnet-w32_8xb64-210e_coco-256x192.py'
         weights_file = '/mmpose/models/top_down/hrnet/hrnet_w32_coco_256x192-c78dce93_20200708.pth'
         
-        inferencer = yarpMMPose.fromconfig(config_file,weights_file)
+        print(config_file)
+        inferencer = yarpMMPose(config_file,weights_file)
         keypoints = inferencer.inference(img)
 
         #These next lines can vary wildly depending on the framework. We need a to abstract this

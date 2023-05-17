@@ -1,46 +1,141 @@
 import numpy as np
 import yarp
+import os
+import sys
+from pathlib import Path
+from importlib import import_module
 
-class PoseEstimation():
+class yarpPose(yarp.RFModule):
 
-    def __init__():
-        pass
+    def __init__(self,name):
+        self.module_name = name
+        self.period = 0.1
         
-    def inference():
+    def inference(self,img):
         pass
 
-    def configure():
-        pass
+    def configure(self,rf):
 
-        image_h = READ
-        image_w = READ
+        image_h = rf.find("height").asInt16()
+        image_w = rf.find("width").asInt16()
 
         yarp.Network.init()
 
-        in_port = yarp.BufferedPortImageRgb()
-        in_port_name = %%MODULENAME%%+"/image:i"
-        in_port.open(in_port_name)
+        self.in_port = yarp.BufferedPortImageRgb()
+        self.in_port_name = "/" + self.module_name + "/image:i"
+        self.in_port.open(self.in_port_name)
 
-        out_port = yarp.BufferedPortImageRgb()
-        out_port_name = %%MODULENAME%%+"/image:o"
-        out_port.open(in_port_name)
+        self.out_image_port = yarp.BufferedPortImageRgb()
+        self.out_image_port_name = "/" + self.module_name + "/image:o"
+        self.out_image_port.open(self.in_port_name)
+
+        self.out_target_port = yarp.BufferedPort()
+        self.out_target_port_name = "/" + self.module_name + "/target:o"
+        self.out_target_port.open(self.out_target_port_name)
 
 
-        in_buf_array = np.ones((image_h,image_w,3), dtype = np.uint8)
-        in_buf_image = yarp.ImageRgb()
-        in_buf_image.resize(image_w,image_h)
-        in_buf_image.setExternal(in_buf_array,in_buf_array.shape[1],in_buf_array.shape[1])
+        self.in_buf_array = np.ones((image_h,image_w,3), dtype = np.uint8)
+        self.in_buf_image = yarp.ImageRgb()
+        self.in_buf_image.resize(image_w,image_h)
+        self.in_buf_image.setExternal(self.in_buf_array,self.in_buf_array.shape[1],self.in_buf_array.shape[1])
 
-        out_buf_array = np.ones((image_h,image_w,3), dtype = np.int8)
-        out_buf_image = yarp.ImageRgb()
-        out_buf_image.resize(image_w,image_h)
-        out_buf_image.setExternal(out_buf_array,out_buf_array.shape[1],out_buf_array.shape[1])
+        self.out_buf_array = np.ones((image_h,image_w,3), dtype = np.int8)
+        self.out_buf_image = yarp.ImageRgb()
+        self.out_buf_image.resize(image_w,image_h)
+        self.out_buf_image.setExternal(self.out_buf_array,self.out_buf_array.shape[1],self.out_buf_array.shape[1])
 
-        while True:
 
-            received_image = in_port.read()
-            in_buf_image.copy(received_image)
+    def updateModule(self):
+        
+        received_image = self.in_port.read()
+        self.in_buf_image.copy(received_image)
 
-            assert in_buf_array.__array_interface__['data'][0] == in_buf_image.getRawImage().__int__()
+        assert self.in_buf_array.__array_interface__['data'][0] == self.in_buf_image.getRawImage().__int__()
 
+        frame = self.in_buf_array
+        skeletons = self.inference(frame)
+
+        target_bottle = yarp.Bottle()
+        subtarget_bottle = yarp.Bottle() #Added to preserve compatibility with yarpOpenPose output
+
+        for keypoints in skeletons:
+
+            keypoints = np.reshape(keypoints,[-1,3])
+            skeleton_bottle = yarp.Bottle()
+
+            for n, kp in enumerate(keypoints):
+                keypoint_bottle = yarp.Bottle()
+                keypoint_bottle.addString(kp)
+                keypoint_bottle.addFloat32(keypoints[kp][0]) #x
+                keypoint_bottle.addFloat32(keypoints[kp][1]) #y
+                keypoint_bottle.addFloat32(keypoints[kp][2]) #score
+                skeleton_bottle.addBottle(keypoint_bottle)
             
+            subtarget_bottle.addBottle(skeleton_bottle)
+
+        target_bottle.addBottle(subtarget_bottle)
+
+        # Writing output skeletons data
+        self.out_target_port.write(target_bottle)
+
+        # Writing output image
+        self.out_buf_array[:,:] = frame
+        self.out_image_port.write(self.out_buf_array)
+
+        return True
+    
+
+    def getPeriod(self):
+        return self.period
+
+    def cleanup(self):
+        self.in_port.close()
+        self.out_image_port.close()
+        self.out_target_port.close()
+        return True
+
+    def interruptModule(self):
+        self.in_port.close()
+        self.out_image_port.close()
+        self.out_target_port.close()
+        return True
+
+    def build(self,rf):
+        '''
+            Factory method that builds the subclass specified in the configuration file
+        '''
+        try:
+            module = import_module(self.module_name)
+        except:
+            print("There is no such module available, using yarpMMPose by default")
+            self.module_name = 'yarpMMPose'
+            module = import_module(self.module_name)
+            
+        cls = getattr(module, self.module_name) #The class must have the same name of the module
+        inferencer = cls.fromconfig(rf)
+        
+        return inferencer
+
+
+if __name__ == '__main__':
+    yarp.Network.init()
+
+    if not yarp.Network.checkNetwork():
+        print("Yarp server is not running")
+        quit(-1)
+
+    yarpPose_path = Path(__file__).parent
+
+    rf = yarp.ResourceFinder()
+    rf.setVerbose(True)
+    rf.setDefaultConfigFile(os.path.join(yarpPose_path,'app/conf/yarpPose.ini'))
+    rf.configure(sys.argv)
+
+    #module_name = rf.find("module").asString()
+    manager = yarpPose('yarpMMPose').build(rf)
+    #manager = yarpMMPose()
+
+    print(type(manager))
+    print(type(rf))
+
+    manager.runModule(rf)

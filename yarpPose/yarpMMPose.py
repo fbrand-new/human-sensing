@@ -1,27 +1,49 @@
-from yarpPose import PoseEstimation
+from yarpPose import yarpPose
 from mmpose.apis import MMPoseInferencer
 import importlib.util
 import sys
 
-class yarpMMPose(PoseEstimation):
+class yarpMMPose(yarpPose):
 
-    def __init__(self,poseInferencer,dataset='COCO'):
-        self.inferencer = poseInferencer
-        self.dataset = dataset
-   
-    @classmethod
-    def fromalias(cls,alias='human',dataset='COCO'):
-        return cls(MMPoseInferencer(alias),dataset)
+    # def __init__(self,poseInferencer,dataset='COCO'):
+    #     self.inferencer = poseInferencer
+    #     self.dataset = dataset
+    #     super().__init__("MMPose")
+
+    # @classmethod
+    # def fromalias(cls,alias='human',dataset='COCO'):
+    #     return cls(MMPoseInferencer(alias),dataset)
+
     
-    @classmethod
-    def fromconfig(cls,config,model,det_model=None,det_weights=None,dataset='COCO'):
+    def __init__(self,config,model,det_model=None,det_weights=None,dataset='COCO'):
         if det_model and det_weights:
             print(det_weights)
-            inferencer = cls(MMPoseInferencer(config,model,det_model=det_model,det_weights=det_weights),dataset)
+            inferencer = MMPoseInferencer(config,model,det_model=det_model,det_weights=det_weights)
         else:
-            inferencer = cls(MMPoseInferencer(config,model),dataset)
+            inferencer = MMPoseInferencer(config,model)
 
-        return inferencer
+        self.inferencer = inferencer
+        self.dataset = dataset
+        super().__init__("MMPose")
+
+    @classmethod
+    def fromconfig(cls,rf):
+        config = rf.find('config').asString()
+        model = rf.find('model').asString()
+        if rf.check('det_model'):
+            det_model = rf.find('det_model').asString()
+        else:
+            det_model = None
+        if rf.check('det_weights'):
+            det_weights = rf.find('det_weights').asString()
+        else:
+            det_weights = None
+        if rf.check('dataset'):
+            dataset = rf.find('dataset').asString()
+        else:
+            dataset = 'COCO'
+
+        return cls(config,model,det_model,det_weights,dataset)
 
     def inference(self,img):
         generator = self.inferencer(img)
@@ -47,10 +69,3 @@ class yarpMMPose(PoseEstimation):
             keypoints.append(person_keypoints)
         
         return keypoints
-
-    # def configure():
-    #     - configure the network
-
-    # def updateModule()
-    #     - leggi immagine
-    #     - fai forward(immagine)
