@@ -63,6 +63,6 @@ public:
     bool interruptModule() override;
     bool close() override;
     double getPeriod() override;
-    yarp::os::Bottle kpToBottle(const mmdeploy::cxx::PoseDetector::Result &keypoints);
+    yarp::os::Bottle kpToBottle(const std::vector<mmdeploy_rect_t>& bboxes, const mmdeploy::cxx::PoseDetector::Result &keypoints);
     std::pair<size_t, size_t> faceKeypointsIdxs();
 };

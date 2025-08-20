@@ -154,7 +154,7 @@ bool yarpRTMPose::updateModule()
     // Convert keypoints to bottle format
     yarp::os::Bottle &target = targetPort.prepare();
     target.clear();
-    target.addList().read(this->kpToBottle(keypoints));
+    target.addList().read(this->kpToBottle(bboxes, keypoints));
     targetPort.write();
 
     cv::Mat keypoints_img = inferencer->paint(img, bboxes, keypoints);
@@ -187,9 +187,15 @@ double yarpRTMPose::getPeriod()
     return period;
 }
 
-yarp::os::Bottle yarpRTMPose::kpToBottle(const mmdeploy::cxx::PoseDetector::Result &keypoints)
+yarp::os::Bottle yarpRTMPose::kpToBottle(const std::vector<mmdeploy_rect_t>& bboxes, const mmdeploy::cxx::PoseDetector::Result &keypoints)
 {
     yarp::os::Bottle targetBottle;
+
+    if(bboxes.size() != keypoints.size())
+    {
+        yDebug() << "Bounding boxes and keypoints size mismatch";
+        return targetBottle;
+    }
 
     if (openpose_format && dataset == "coco_wholebody")
     {
@@ -199,9 +205,23 @@ yarp::os::Bottle yarpRTMPose::kpToBottle(const mmdeploy::cxx::PoseDetector::Resu
         // Openpose format
         //(((kp x y score)... (face (x y score) (x y score) ...) (kp x y score)))
 
-        for (auto &skeleton : keypoints)
+        // Adding bbox as first bottle
+        //(((bbox left right top bottom) (kp x y score) .... (face (x y score) ... ) (kp x y score)))
+
+        for (std::size_t j = 0; j<keypoints.size(); ++j)
         {
             yarp::os::Bottle skeletonBottle;
+            auto& skeleton = keypoints[j];
+            auto& bbox = bboxes[j];
+
+            // Add bbox as first bottle
+            yarp::os::Bottle bboxBottle;
+            bboxBottle.addString("bbox");
+            bboxBottle.addFloat32(bbox.left);
+            bboxBottle.addFloat32(bbox.right);
+            bboxBottle.addFloat32(bbox.top);
+            bboxBottle.addFloat32(bbox.bottom);
+            skeletonBottle.addList().read(bboxBottle);
 
             // Adding fake keypoint with 0 score to keep the format
             for (auto &[key, value] : this->op_not_in_coco_json.items())
